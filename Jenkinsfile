@@ -1,34 +1,33 @@
-node {
-    def app
-
-    stage('Clone repository') {
-      
-
-        checkout scm
-    }
-
-    stage('Build image') {
-  
-       app = docker.build("raj80dockerid/test")
-    }
-
-    stage('Test image') {
-  
-
-        app.inside {
-            sh 'echo "Tests passed"'
+pipeline{
+    agent any
+    stages{
+        stage("checkout scm"){
+            steps{
+            echo "pull code from scm"
         }
     }
-
-    stage('Push image') {
-        
-        docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
-            app.push("${env.BUILD_NUMBER}")
+        stage("build image"){
+            steps{
+            echo "building image"
+            sh "docker build -t my-app ."
         }
     }
-    
-    stage('Trigger ManifestUpdate') {
-                echo "triggering updatemanifestjob"
-                build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: env.BUILD_NUMBER)]
+        stage("push image to dockerhub"){
+            steps{
+            echo "pushing image to dockerhub"
+            withCredentials([usernamePassword(credentialsId: 'dockerHub', passwordVariable: 'dockerhubpass', usernameVariable: 'dockerhubuser')]) {
+            sh "docker tag my-app ${env.dockerhubuser}/my-app:v1"
+            sh "docker login -u ${env.dockerhubuser} -p ${env.dockerhubpass}"
+            sh "docker push ${env.dockerhubuser}}/my-app:v1"
+ }
+      }
+            
         }
+        stage("kubernetes manifest"){
+         steps{
+            echo "trigger kubernetes manifest"
+            build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: 'env.BUILD_NUMBER')]
+        }
+        }
+    }
 }
